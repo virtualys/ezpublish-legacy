@@ -73,11 +73,18 @@ class ezjscPacker
     {
         $ret = '';
         $lang = $lang ? ' language="' . $lang . '"' : '';
+	$type = $type && ( $type !== 'text/javascript' ) ? ' type="' . $type . '"' : '';
         $http = eZHTTPTool::instance();
         $useFullUrl = ( isset( $http->UseFullUrl ) && $http->UseFullUrl );
         $packedFiles = ezjscPacker::packFiles( $scriptFiles, 'javascript/', '.js', $packLevel, $indexDirInCacheHash );
-        if ( $charset )
-            $charset = " charset=\"$charset\"";
+        if ( $charset ) {
+            if ( $charset === 'utf-8' ) {
+                $charset = '';
+            }
+            else {
+                $charset = " charset=\"$charset\"";
+            }
+        }
         foreach ( $packedFiles as $packedFile )
         {
             // Is this a js file or js content?
@@ -90,11 +97,11 @@ class ezjscPacker
                 {
                     $packedFile = $http->createRedirectUrl( $packedFile, array( 'pre_url' => false ) );
                 }
-                $ret .= "<script$lang type=\"$type\" src=\"$packedFile\"$charset></script>\r\n";
+                $ret .= "<script$lang$type src=\"$packedFile\"$charset></script>\r\n";
             }
             else
             {
-                $ret .=  $packedFile ? "<script$lang type=\"$type\">\r\n$packedFile\r\n</script>\r\n" : '';
+                $ret .=  $packedFile ? "<script$lang$type>\r\n$packedFile\r\n</script>\r\n" : '';
             }
         }
         return $ret;
@@ -114,7 +121,8 @@ class ezjscPacker
     static function buildStylesheetTag( $cssFiles, $media = 'all', $type = 'text/css', $rel = 'stylesheet', $packLevel = 3, $indexDirInCacheHash = true )
     {
         $ret = '';
-        $packedFiles = ezjscPacker::packFiles( $cssFiles, 'stylesheets/', '.css', $packLevel, $indexDirInCacheHash, '_' . $media );
+        $type = $type && ( $type !== 'text/css' ) ? ' type="' . $type . '"' : '';
+        $packedFiles = ezjscPacker::packFiles( $cssFiles, 'stylesheets/', '_' . $media . '.css', $packLevel, $indexDirInCacheHash );
         $http = eZHTTPTool::instance();
         $useFullUrl = ( isset( $http->UseFullUrl ) && $http->UseFullUrl );
         $media = $media && $media !== 'all' ? ' media="' . $media . '"' : '';
@@ -130,11 +138,11 @@ class ezjscPacker
                 {
                     $packedFile = $http->createRedirectUrl( $packedFile, array( 'pre_url' => false ) );
                 }
-                $ret .= "<link rel=\"$rel\" type=\"$type\" href=\"$packedFile\"$media />\r\n";
+                $ret .= "<link rel=\"$rel\"$type href=\"$packedFile\"$media />\r\n";
             }
             else
             {
-                $ret .= $packedFile ? "<style type=\"$type\"$media>\r\n$packedFile\r\n</style>\r\n" : '';
+                $ret .= $packedFile ? "<style$type$media>\r\n$packedFile\r\n</style>\r\n" : '';
             }
         }
         return $ret;
@@ -163,7 +171,7 @@ class ezjscPacker
      */
     static function buildStylesheetFiles( $cssFiles, $packLevel = 3, $indexDirInCacheHash = true )
     {
-        return ezjscPacker::packFiles( $cssFiles, 'stylesheets/', '.css', $packLevel, $indexDirInCacheHash, '_all' );
+        return ezjscPacker::packFiles( $cssFiles, 'stylesheets/', '_all.css', $packLevel, $indexDirInCacheHash );
     }
 
     // static :: gets the cache dir
@@ -200,7 +208,7 @@ class ezjscPacker
     }
 
     /**
-     * Merges a collection of files togheter and returns array of paths to the files.
+     * Merges a collection of files together and returns array of paths to the files.
      * js /css content is returned as string if packlevel is 0 and you use a js/ css generator.
      * $fileArray can also be array of array of files, like array(  'file.js', 'file2.js', array( 'file5.js' ) )
      * The name of the cached file is a md5 hash consistant of the file paths
@@ -212,7 +220,7 @@ class ezjscPacker
      * @param string $fileExtension File extension name (for use on cache file)
      * @param int $packLevel Level of packing, values: 0-3
      * @param bool $indexDirInCacheHash To add index path in cache hash or not
-     * @param string $filePostName Extra file name part, example "_screen" in case of medai use for css
+     * @param string $filePostName Extra file name part, example "_screen" in case of media use for css
      *
      * @return array List of css files
      */
@@ -248,6 +256,31 @@ class ezjscPacker
             'custom_host'    => ( isset( $customHosts[$fileExtension] ) ? $customHosts[$fileExtension] : '' ),
         );
 
+        // Resolution of alias
+        if ( $ezjscINI->hasVariable( 'eZJSCore', 'Aliases' ) ) {
+            $aliases = $ezjscINI->variable( 'eZJSCore', 'Aliases' );
+            foreach ( $fileArray as $key => $file ) {
+                $queryPos = strpos( $file, '?' );
+                if ( $queryPos === false ) {
+                    if ( isset( $aliases[ $file ] ) ) {
+                        $fileArray[ $key ] = $aliases[ $file ];
+                    }
+                }
+                else {
+                    $baseFile = substr( $file, 0, $queryPos );
+                    if ( isset( $aliases[ $baseFile ] ) ) {
+                        $aliasQueryPos = strpos( $aliases[ $baseFile ], '?' );
+                        if ( $aliasQueryPos === false ) {
+                            $fileArray[ $key ] = $aliases[ $baseFile ] . substr( $file, $queryPos );
+                        }
+                        else {
+                            $fileArray[ $key ] = $aliases[ $baseFile ] . '&amp;' . substr( $file, $queryPos + 1 );
+                        }
+                    }
+                }
+            }
+        }
+	
         // Only pack files if Packer is enabled and if not set DevelopmentMode is disabled
         if ( $ezjscINI->hasVariable( 'eZJSCore', 'Packer' ) )
         {
@@ -330,6 +363,13 @@ class ezjscPacker
 
                 $data['http'][] = $protocol . $file;
                 continue;
+            }
+            // is it a bundle path ?
+            else if ( strpos( $file, '/bundles/' ) === 0 )
+            {
+                // Get file as is
+            	$data['http'][] = $file;
+            	continue;
             }
             // is it a absolute path ?
             else if ( strpos( $file, 'var/' ) === 0 )

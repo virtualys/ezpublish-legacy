@@ -51,6 +51,10 @@ if ( isset( $_GET['ContentType'] ) )
 {
     $contentType = $_GET['ContentType'];
 }
+elseif ( isset( $_POST['ContentType'] ) )
+{
+    $contentType = $_POST['ContentType'];
+}
 else
 {
     $contentType = ezjscAjaxContent::getHttpAccept();
