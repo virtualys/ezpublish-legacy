@@ -28,7 +28,6 @@
 
 /*
  * Display the embed view of a object with params for class/inline/view/align/size
- * TODO: support for custom attributes
  */
 
 $embedId         = 0;
@@ -131,8 +130,17 @@ else if ( $http->hasPostVariable('align') )
         $align = 'center';
 }
 
-//if ( $align === 'left' || $align === 'right' )
-//    $style .= ' float: ' . $align . ';';
+$parameters = array( 'size' => $size, 'align' => $align, 'show_path' => true );
+foreach ( $_GET as $key => $value ) {
+	if ( strncmp( $key, 'custom_', 7 ) == 0 ) {
+		$parameters[substr( $key, 7 )] = $value;
+	}
+}
+foreach ( $_POST as $key => $value ) {
+   if ( strncmp( $key, 'custom_', 7 ) == 0 ) {
+      $parameters[substr( $key, 7 )] = $value;
+   }
+}
 
 
 $res = eZTemplateDesignResource::instance();
@@ -143,7 +151,7 @@ $tpl->setVariable( 'view', $view );
 $tpl->setVariable( 'object', $embedObject );
 $tpl->setVariable( 'link_parameters', array() );
 $tpl->setVariable( 'classification', $className );
-$tpl->setVariable( 'object_parameters', array( 'size' => $size, 'align' => $align, 'show_path' => true ) );
+$tpl->setVariable( 'object_parameters', $parameters );
 if ( isset( $embedNode ) ) $tpl->setVariable( 'node', $embedNode );
 
 //if ( $style !== '' )

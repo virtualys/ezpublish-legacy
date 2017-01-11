@@ -113,7 +113,7 @@ $sizeTypeArray   = array();
 
 if ( $contentType === 'auto' )
 {
-    // figgure out what content type group this class is in
+    // figure out what content type group this class is in
     $contentType = eZOEXMLInput::embedTagContentType( $embedClassIdentifier, $embedClassID );
 }
 
@@ -146,6 +146,21 @@ foreach( $imageSizeArray as $size )
     }
     $sizeTypeArray[$size] .= ' ' . $imagePixelSize;
 }
+
+/// Patch EZ Platform
+
+$container = ezpKernel::instance()->getServiceContainer();
+$configResolver = $container->get( 'ezpublish.config.resolver' );
+if ( $configResolver->hasParameter( 'content_image_variations', 'virtualys_sns_content' ) ) {
+	$variations = $configResolver->getParameter( 'content_image_variations', 'virtualys_sns_content' );
+	foreach ( $variations as $variation => $properties ) {
+		$sizeTypeArray[$variation] = empty( $properties['name'] )
+				? ucfirst( $variation )
+				: $properties['name'];
+	}
+}
+
+/////////////////////
 
 $sizeTypeArray['original'] = 'Original';
 
@@ -293,7 +308,8 @@ $tpl->setVariable( 'persistent_variable', array() );
 $tpl->setVariable( 'original_uri_string', eZURI::instance()->originalURIString() );
 
 $Result = array();
-$Result['content'] = $tpl->fetch( 'design:ezoe/tag_embed_' . $contentType . '.tpl' );
+// $Result['content'] = $tpl->fetch( 'design:ezoe/tag_embed_' . $contentType . '.tpl' );
+$Result['content'] = $tpl->fetch( 'design:ezoe/tag_embed_objects.tpl' );
 $Result['pagelayout'] = 'design:ezoe/popup_pagelayout.tpl';
 $Result['persistent_variable'] = $tpl->variable( 'persistent_variable' );
 

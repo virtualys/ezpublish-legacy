@@ -1,4 +1,6 @@
 <?php
+use eZ\Publish\API\Repository\Exceptions\NotFoundException;
+use eZ\Publish\API\Repository\Exceptions\UnauthorizedException;
 //
 // Created on: <06-Nov-2002 15:10:02 wy>
 // Forked on: <20-Des-2007 13:02:06 ar> from eZDHTMLInput class
@@ -1195,8 +1197,19 @@ class eZOEXMLInput extends eZXMLInputHandler
                     }
                 }
 
+                //////
+                // SNS : Retro compatibilité - les nouvelles implémentations gèrent les images comme des objets
+                $ini = eZINI::instance( 'spreadnshare.ini' );
+                if ( $ini->hasVariable( 'SiteInfo', 'SiteType' ) ) {
+                  $legacyOE = ( $ini->variable( 'SiteInfo', 'SiteType' ) == 'standard' );
+                }
+                else {
+                    $legacyOE = false;
+                }
+                ////
+                
                 $embedContentType = self::embedTagContentType( $classIdentifier );
-                if ( $embedContentType === 'images' )
+                if ( $legacyOE && $embedContentType === 'images' )
                 {
                     $ini = eZINI::instance();
                     $URL = self::getServerURL();
@@ -1284,30 +1297,131 @@ class eZOEXMLInput extends eZXMLInputHandler
 
                     $objectParam = array( 'size' => $size, 'align' => $alignment, 'show_path' => $showPath );
                     if ( $htmlID ) $objectParam['id'] = $htmlID;
-
+                    
+                    //////
+                    // SNS : Send custom attributes to template
+                    foreach ( $tag->attributes as $attribute ) {
+                        if ( $attribute->namespaceURI == 'http://ez.no/namespaces/ezpublish3/custom/' ) {
+                            if ( !isset( $objectParam[$attribute->name] ) ) {
+                                  $objectParam[$attribute->name] = $attribute->value;
+                            }
+                        }
+                    }
+                    /////
+                    
                     $res = eZTemplateDesignResource::instance();
                     $res->setKeys( array( array('classification', $className) ) );
 
-                    if ( isset( $node ) )
-                    {
-                        $templateOutput = self::fetchTemplate( 'design:content/datatype/view/ezxmltags/' . $tagName . $tplSuffix . '.tpl', array(
-                            'view' => $view,
-                            'object' => $object,
-                            'link_parameters' => array(),
-                            'classification' => $className,
-                            'object_parameters' => $objectParam,
-                            'node' => $node,
-                        ));
+                    if ( $legacyOE ) {
+                        if ( isset( $node ) )
+                        {
+                            $templateOutput = self::fetchTemplate( 'design:content/datatype/view/ezxmltags/' . $tagName . $tplSuffix . '.tpl', array(
+                                'view' => $view,
+                                'object' => $object,
+                                'link_parameters' => array(),
+                                'classification' => $className,
+                                'object_parameters' => $objectParam,
+                                'node' => $node,
+                            ));
+                        }
+                        else
+                        {
+                            $templateOutput = self::fetchTemplate( 'design:content/datatype/view/ezxmltags/' . $tagName . $tplSuffix . '.tpl', array(
+                                'view' => $view,
+                                'object' => $object,
+                                'link_parameters' => array(),
+                                'classification' => $className,
+                                'object_parameters' => $objectParam,
+                            ));
+                        }
                     }
-                    else
-                    {
-                        $templateOutput = self::fetchTemplate( 'design:content/datatype/view/ezxmltags/' . $tagName . $tplSuffix . '.tpl', array(
-                            'view' => $view,
-                            'object' => $object,
-                            'link_parameters' => array(),
-                            'classification' => $className,
-                            'object_parameters' => $objectParam,
-                        ));
+                    else {
+                        $container = ezpKernel::instance()->getServiceContainer();
+                        $viewManager = $container->get( 'ezpublish.view_manager' );
+                        
+                        if ( is_numeric( $objectID ) ) {
+                        	try {
+                        		$content = $container->get('ezpublish.api.repository')
+                        			->sudo(
+                        				function ( Repository $repository ) use ( $objectID )
+                        				{
+                        					return $repository->getContentService()->loadContent( $objectID );
+                        				}
+                        		);
+                        		$objectParam['nolink'] = true;
+                        	
+                        		$templateOutput =
+                        			$viewManager->renderContent(
+                        				$content,
+                        				$view == 'layer' ? 'cpnt_shownode' : $view,
+                        				array(
+                        						'objectParameters' => $objectParam
+                        				) );
+                        	
+                        		if ( $view == 'layer' ) {
+                        			$templateOutput =
+	                        			'<div class="mfp-textflow">' .
+	                        			'<div class="mfp-close">&times;</div>' .
+	                        			'<div class="mfp-textflow-content">' .
+	                        			trim( preg_replace( '/<!--(.|\s)*?-->/', '', $templateOutput ) ) .
+	                        			'</div>' .
+	                        			'</div>';
+                        		}
+                        	}
+                        	catch ( NotFoundException $e ) {
+                        		$templateOutput = '<span class="text-danger">Object not found</span>';
+                        	}
+                        	catch ( UnauthorizedException $e ) {
+                        		$templateOutput = '<span class="text-danger">Access denied to object</span>';
+                        	}
+                        	catch ( \Exception $e ) {
+                        		eZDebug::writeError( $e->getMessage(), __METHOD__ . ' -- ' . __LINE__ );
+                        		$templateOutput = '<span class="text-danger">Internal error : ' . $e->getMessage() . '</span>';
+                        	}
+                        }
+                        else if ( is_numeric( $nodeID ) ) {
+                        	try {
+                        		$location = $container->get('ezpublish.api.repository')
+                        			->sudo(
+                        				function ( Repository $repository ) use ( $nodeID )
+                        				{
+                        					return $repository->getLocationService()->loadLocation( $nodeID );
+                        				}
+                        		);
+                        		$objectParam['nolink'] = true;
+                        	
+                        		$templateOutput =
+	                        		$viewManager->renderLocation(
+	                        				$location,
+	                        				$view == 'layer' ? 'cpnt_shownode' : $view,
+	                        				array(
+	                        						'objectParameters' => $objectParam
+	                        				) );
+                        	
+                        		if ( $view == 'layer' ) {
+                        			$templateOutput =
+	                        			'<div class="mfp-textflow">' .
+	                        			'<div class="mfp-close">&times;</div>' .
+	                        			'<div class="mfp-textflow-content">' .
+	                        			trim( preg_replace( '/<!--(.|\s)*?-->/', '', $templateOutput ) ) .
+	                        			'</div>' .
+	                        			'</div>';
+                        		}
+                        	}
+                        	catch ( NotFoundException $e ) {
+                        		$templateOutput = '<span class="text-danger">Object not found</span>';
+                        	}
+                        	catch ( UnauthorizedException $e ) {
+                        		$templateOutput = '<span class="text-danger">Access denied to object</span>';
+                        	}
+                        	catch ( \Exception $e ) {
+                        		eZDebug::writeError( $e->getMessage(), __METHOD__ . ' -- ' . __LINE__ );
+                        		$templateOutput = '<span class="text-danger">Internal error : ' . $e->getMessage() . '</span>';
+                        	}
+                        }
+                        else {
+                        	$templateOutput = '';
+                        }
                     }
 
                     $output .= '<' . $htmlTagName . ' id="' . $idString . '" title="' . $objectName . '"' .
@@ -1753,8 +1867,14 @@ class eZOEXMLInput extends eZXMLInputHandler
                 }
                 if ( isset( self::$customAttributeStyleMap[$attribute->name] ) )
                 {
-                    $styleString .= self::$customAttributeStyleMap[$attribute->name] . ': ' .
-                                    $attribute->value . '; ';
+                    //////
+                    // SNS : suppression des styles width / height s'ils sont fixés à 0
+                    $styleName = self::$customAttributeStyleMap[$attribute->name];
+                    if ( ( $styleName != 'width' && $styleName != 'height' ) 
+                           || ( $attribute->value != '0' && $attribute->value != '0px' && $attribute->value != '0em' && $attribute->value != '0%' ) ) {
+                       $styleString .= $styleName . ': ' . $attribute->value . '; ';
+                    }
+                    //////
                 }
             }
         }
