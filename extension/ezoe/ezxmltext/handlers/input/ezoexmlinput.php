@@ -1,6 +1,9 @@
 <?php
+
+use eZ\Publish\API\Repository\Repository;
 use eZ\Publish\API\Repository\Exceptions\NotFoundException;
 use eZ\Publish\API\Repository\Exceptions\UnauthorizedException;
+
 //
 // Created on: <06-Nov-2002 15:10:02 wy>
 // Forked on: <20-Des-2007 13:02:06 ar> from eZDHTMLInput class
