@@ -27,6 +27,10 @@ class eZUser extends eZPersistentObject
     const PASSWORD_HASH_MYSQL = 4;
     /// Passwords in plaintext, should not be used for real sites
     const PASSWORD_HASH_PLAINTEXT = 5;
+    /// Passwords in bcrypt format
+    const PASSWORD_HASH_BCRYPT = 6;
+    /// Passwords in PHP default format
+    const PASSWORD_HASH_PHP_DEFAULT = 7;
 
     /**
      * Max length allowed for a login or a password
@@ -52,9 +56,9 @@ class eZUser extends eZPersistentObject
 
     protected static $anonymousId = null;
 
-    function eZUser( $row = array() )
+    public function __construct( $row = array() )
     {
-        $this->eZPersistentObject( $row );
+        parent::__construct( $row );
         $this->OriginalPassword = false;
         $this->OriginalPasswordConfirm = false;
     }
@@ -135,6 +139,14 @@ class eZUser extends eZPersistentObject
             {
                 return 'plaintext';
             } break;
+            case self::PASSWORD_HASH_BCRYPT:
+            {
+                return 'bcrypt';
+            } break;
+            case self::PASSWORD_HASH_PHP_DEFAULT:
+            {
+                return 'php_default';
+            } break;
         }
     }
 
@@ -165,6 +177,14 @@ class eZUser extends eZPersistentObject
             case 'plaintext':
             {
                 return self::PASSWORD_HASH_PLAINTEXT;
+            } break;
+            case 'bcrypt':
+            {
+                return self::PASSWORD_HASH_BCRYPT;
+            } break;
+            case 'php_default':
+            {
+                return self::PASSWORD_HASH_PHP_DEFAULT;
             } break;
         }
     }
@@ -605,14 +625,8 @@ WHERE user_id = '" . $userID . "' AND
     {
         $ini = eZINI::instance();
         $type = strtolower( $ini->variable( 'UserSettings', 'HashType' ) );
-        if ( $type == 'md5_site' )
-            return self::PASSWORD_HASH_MD5_SITE;
-        else if ( $type == 'md5_user' )
-            return self::PASSWORD_HASH_MD5_USER;
-        else if ( $type == 'plaintext' )
-            return self::PASSWORD_HASH_PLAINTEXT;
-        else
-            return self::PASSWORD_HASH_MD5_PASSWORD;
+
+        return self::passwordHashTypeID( $type );
     }
 
     /*!
@@ -799,8 +813,7 @@ WHERE user_id = '" . $userID . "' AND
                         ezcontentobject.id=contentobject_id AND
                         ( ( password_hash_type!=4 ) OR
                           ( password_hash_type=4 AND
-                              ( $loginText ) AND
-                          password_hash=PASSWORD('$passwordEscaped') ) )";
+                            password_hash=PASSWORD('$passwordEscaped') ) )";
         }
         else
         {
@@ -1175,7 +1188,7 @@ WHERE user_id = '" . $userID . "' AND
                             $userId = $currentUser->attribute( 'contentobject_id' );
 
                             $userInfo = array();
-                            $userInfo[$userId] = array( 
+                            $userInfo[$userId] = array(
                                 'contentobject_id' => $userId,
                                 'login' => $currentUser->attribute( 'login' ),
                                 'email' => $currentUser->attribute( 'email' ),
@@ -1195,7 +1208,7 @@ WHERE user_id = '" . $userID . "' AND
                     {
                         eZDebug::writeError( "Undefined ssoHandler class: $className", __METHOD__ );
                     }
-                }                
+                }
             }
         }
 
@@ -1415,8 +1428,12 @@ WHERE user_id = '" . $userID . "' AND
                                         'password_hash'      => $user->attribute( 'password_hash' ),
                                         'password_hash_type' => $user->attribute( 'password_hash_type' ) );
 
+        // function groups relies on caching. The function generateUserCacheData relies on function groups.
+        // To avoid an infinitive loop, the code is disabling caching in function generateUserCacheData.
+        // At the end of this method flag is set to previous value again
+        $previousCachingState = $user->setCachingEnabled( false );
         // user groups list (session: eZUserGroupsCache)
-        $groups = $user->generateGroupIdList();
+        $groups = $user->groups(); 
         $data['groups'] = $groups;
 
         // role list (session: eZRoleIDList)
@@ -1424,7 +1441,7 @@ WHERE user_id = '" . $userID . "' AND
         $data['roles'] = eZRole::fetchIDListByUser( $groups );
 
         // role limitation list (session: eZRoleLimitationValueList)
-        $limitList = $user->limitList( false );
+        $limitList = $user->limitList();
         foreach ( $limitList as $limit )
         {
             $data['role_limitations'][] = $limit['limit_value'];
@@ -1435,6 +1452,8 @@ WHERE user_id = '" . $userID . "' AND
 
         // discount rules (session: eZUserDiscountRules<userId>)
         $data['discount_rules'] = eZUserDiscountRule::generateIDListByUserID( $userId );
+
+        $user->setCachingEnabled( $previousCachingState );
 
         return $data;
     }
@@ -1804,6 +1823,25 @@ WHERE user_id = '" . $userID . "' AND
         {
             $str = $password;
         }
+        else if ( ( $type == self::PASSWORD_HASH_BCRYPT ||
+                    $type == self::PASSWORD_HASH_PHP_DEFAULT ) &&
+                  $hash )
+        {
+            if ( password_verify( $password, $hash ) )
+            {
+                return $hash;
+            }
+
+            return false;
+        }
+        else if ( $type == self::PASSWORD_HASH_BCRYPT )
+        {
+            $str = password_hash( $password, PASSWORD_BCRYPT );
+        }
+        else if ( $type == self::PASSWORD_HASH_PHP_DEFAULT )
+        {
+            $str = password_hash( $password, PASSWORD_DEFAULT );
+        }
         else // self::PASSWORD_HASH_MD5_PASSWORD
         {
             $str = md5( $password );
@@ -1920,7 +1958,7 @@ WHERE user_id = '" . $userID . "' AND
      */
     function generateAccessArray()
     {
-        $idList = $this->generateGroupIdList();
+        $idList = $this->groups();
         $idList[] = $this->attribute( 'contentobject_id' );
 
         return eZRole::accessArrayByUserID( $idList );
@@ -2470,64 +2508,29 @@ WHERE user_id = '" . $userID . "' AND
         {
             if ( !isset( $this->GroupsAsObjects ) )
             {
-                $db = eZDB::instance();
-                $contentobjectID = $this->attribute( 'contentobject_id' );
-                $userGroups = $db->arrayQuery( "SELECT d.*, c.path_string
-                                                FROM ezcontentobject_tree  b,
-                                                     ezcontentobject_tree  c,
-                                                     ezcontentobject d
-                                                WHERE b.contentobject_id='$contentobjectID' AND
-                                                      b.parent_node_id = c.node_id AND
-                                                      d.id = c.contentobject_id
-                                                ORDER BY c.contentobject_id  ");
-                $userGroupArray = array();
-                $pathArray = array();
-                foreach ( $userGroups as $group )
-                {
-                    $pathItems = explode( '/', $group["path_string"] );
-                    array_pop( $pathItems );
-                    array_pop( $pathItems );
-                    foreach ( $pathItems as $pathItem )
-                    {
-                        if ( $pathItem != '' && $pathItem > 1 )
-                            $pathArray[] = $pathItem;
-                    }
-                    $userGroupArray[] = new eZContentObject( $group );
-                }
-                $pathArray = array_unique( $pathArray );
+                $this->GroupsAsObjects = array();
 
-                if ( !empty( $pathArray ) )
+                foreach ( $this->groups() as $group )
                 {
-                    $extraGroups = $db->arrayQuery( "SELECT d.*
-                                                FROM ezcontentobject_tree  c,
-                                                     ezcontentobject d
-                                                WHERE c.node_id in ( " . implode( ', ', $pathArray ) . " ) AND
-                                                      d.id = c.contentobject_id
-                                                ORDER BY c.contentobject_id  ");
-                    foreach ( $extraGroups as $group )
-                    {
-                        $userGroupArray[] = new eZContentObject( $group );
-                    }
+                    $this->GroupsAsObjects[] = new eZContentObject( $group );
                 }
-
-                $this->GroupsAsObjects = $userGroupArray;
             }
+
             return $this->GroupsAsObjects;
         }
         else
         {
             if ( !isset( $this->Groups ) )
             {
-                if ( eZINI::instance()->variable( 'RoleSettings', 'EnableCaching' ) === 'true' )
+                $this->fetchUserCacheIfNeeded();
+                if ( !isset($this->UserCache['groups']) )
                 {
-                    $userCache = $this->getUserCache();
-                    $this->Groups = $userCache['groups'];
+                    $this->UserCache['groups'] = $this->generateGroupIdList();
                 }
-                else
-                {
-                    $this->Groups = $this->generateGroupIdList();
-                }
+
+                $this->Groups = $this->UserCache['groups'];
             }
+
             return $this->Groups;
         }
     }
@@ -2896,6 +2899,32 @@ WHERE user_id = '" . $userID . "' AND
         return $hasAccessToSite;
     }
 
+    /**
+     * Fetches user cache when given preconditions are met
+     */
+    protected function fetchUserCacheIfNeeded()
+    {
+        if ( null === $this->UserCache && true === $this->CachingEnabled && 'true' === eZINI::instance()->variable( 'RoleSettings', 'EnableCaching' ))
+        {
+            $this->UserCache = $this->getUserCache();
+        }
+    }
+
+    /**
+     * Sets cachingEnabled flag to given value. Returns previous value of cachingEnabled flag
+     *
+     * @param bool $cachingEnabled
+     *
+     * @return bool
+     */
+    protected function setCachingEnabled( $cachingEnabled )
+    {
+        $previousValue = $this->CachingEnabled;
+        $this->CachingEnabled = $cachingEnabled;
+
+        return $previousValue;
+    }
+
     /// \privatesection
     public $Login;
     public $Email;
@@ -2921,6 +2950,8 @@ WHERE user_id = '" . $userID . "' AND
      * @since 4.3
      */
     protected static $userHasLoggedOut = false;
+
+    private $CachingEnabled = true;
 }
 
 ?>

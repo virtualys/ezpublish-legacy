@@ -178,12 +178,12 @@ class eZOEInputParser extends eZXMLInputParser
      * @param bool $parseLineBreaks flag if line breaks should be given meaning or not
      * @param bool $removeDefaultAttrs signal if attributes of default value should not be saved.
      */
-    function eZOEInputParser( $validateErrorLevel = eZXMLInputParser::ERROR_NONE,
+    public function __construct( $validateErrorLevel = eZXMLInputParser::ERROR_NONE,
                               $detectErrorLevel = eZXMLInputParser::ERROR_NONE,
                               $parseLineBreaks = false,
                               $removeDefaultAttrs = false )
     {
-        $this->eZXMLInputParser( $validateErrorLevel,
+        parent::__construct( $validateErrorLevel,
                                  $detectErrorLevel,
                                  $parseLineBreaks,
                                  $removeDefaultAttrs );
@@ -262,7 +262,7 @@ class eZOEInputParser extends eZXMLInputParser
                     if ( isset( $this->Namespaces[$prefix] ) )
                     {
                         $URI = $this->Namespaces[$prefix];
-                        $element->setAttributeNS( $URI, $qualifiedName, $value );
+                        $element->setAttributeNS( $URI, $qualifiedName, htmlspecialchars_decode( $value ) );
                     }
                     else
                     {
@@ -271,7 +271,7 @@ class eZOEInputParser extends eZXMLInputParser
                 }
                 else
                 {
-                    $element->setAttribute( $qualifiedName, $value );
+                    $element->setAttribute( $qualifiedName, htmlspecialchars_decode( $value ) );
                 }
             }
         }
@@ -669,7 +669,7 @@ class eZOEInputParser extends eZXMLInputParser
         if ( $this->XMLSchema->isInline( $element ) )
             return null;
 
-        self::elementStylesToAttribute( $element );
+        $this->elementStylesToAttribute( $element );
         return null;
     }
 
@@ -692,7 +692,7 @@ class eZOEInputParser extends eZXMLInputParser
                 $anchorElement = $element->removeChild( $anchorElement );
             }
         }
-        self::elementStylesToAttribute( $element );
+        $this->elementStylesToAttribute( $element );
         return null;
     }
 
@@ -706,7 +706,7 @@ class eZOEInputParser extends eZXMLInputParser
      */
     function transformStyles( $element, &$params )
     {
-        self::elementStylesToAttribute( $element );
+        $this->elementStylesToAttribute( $element );
         return null;
     }
 
@@ -1501,7 +1501,7 @@ class eZOEInputParser extends eZXMLInputParser
      *
      * @param DOMElement $element
      */
-    protected static function elementStylesToAttribute( DOMElement $element )
+    protected function elementStylesToAttribute( DOMElement $element )
     {
         $styleString = $element->getAttribute( 'style' );
         if ( $styleString )
@@ -1520,7 +1520,16 @@ class eZOEInputParser extends eZXMLInputParser
                     $name = 'align';
 
                 if ( $name )
-                    $element->setAttribute( $name, $value );
+                {
+                    try
+                    {
+                        $element->setAttribute( $name, $value );
+                    }
+                    catch (DOMException $e)
+                    {
+                        $this->handleError( self::ERROR_DATA, $e->getMessage() );
+                    }
+                }
             }
         }
     }

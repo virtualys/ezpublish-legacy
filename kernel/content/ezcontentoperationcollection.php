@@ -21,13 +21,6 @@ class eZContentOperationCollection
      */
     private static $operationsStack = 0;
 
-    /*!
-     Constructor
-    */
-    function eZContentOperationCollection()
-    {
-    }
-
     static public function readNode( $nodeID )
     {
 
@@ -736,6 +729,11 @@ class eZContentOperationCollection
 
        eZContentObject::fixReverseRelations( $objectID, 'move' );
 
+        if ( !eZSearch::getEngine() instanceof eZSearchEngine )
+        {
+            eZContentOperationCollection::registerSearchObject( $objectID );
+        }
+
        return array( 'status' => true );
     }
 
@@ -1214,12 +1212,20 @@ class eZContentOperationCollection
         $curNode = eZContentObjectTreeNode::fetch( $parentNodeID );
         if ( $curNode instanceof eZContentObjectTreeNode )
         {
+             $objectIDs = array();
              $db = eZDB::instance();
              $db->begin();
              for ( $i = 0, $l = count( $priorityArray ); $i < $l; $i++ )
              {
                  $priority = (int) $priorityArray[$i];
                  $nodeID = (int) $priorityIDArray[$i];
+                 $node = eZContentObjectTreeNode::fetch( $nodeID );
+                 if ( !$node instanceof eZContentObjectTreeNode )
+                 {
+                     continue;
+                 }
+
+                 $objectIDs[] = $node->attribute( 'contentobject_id' );
                  $db->query( "UPDATE
                                   ezcontentobject_tree
                               SET
@@ -1229,6 +1235,14 @@ class eZContentOperationCollection
              }
              $curNode->updateAndStoreModified();
              $db->commit();
+             if ( !eZSearch::getEngine() instanceof eZSearchEngine )
+             {
+                 eZContentCacheManager::clearContentCacheIfNeeded( $objectIDs );
+                 foreach ( $objectIDs as $objectID )
+                 {
+                     eZContentOperationCollection::registerSearchObject( $objectID );
+                 }
+             }
         }
         return array( 'status' => true );
     }
@@ -1373,6 +1387,10 @@ class eZContentOperationCollection
             $state = eZContentObjectState::fetchById( $selectedStateID );
             $object->assignState( $state );
         }
+        eZAudit::writeAudit( 'state-assign', array( 'Content object ID' => $object->attribute( 'id' ),
+                                                    'Content object name' => $object->attribute( 'name' ),
+                                                    'Selected State ID Array' => implode( ', ' , $selectedStateIDList ),
+                                                    'Comment' => 'Updated states of the current object: eZContentOperationCollection::updateObjectState()' ) );
         //call appropriate method from search engine
         eZSearch::updateObjectState($objectID, $selectedStateIDList);
 

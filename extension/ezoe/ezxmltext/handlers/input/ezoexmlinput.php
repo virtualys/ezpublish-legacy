@@ -43,17 +43,9 @@ use eZ\Publish\API\Repository\Exceptions\UnauthorizedException;
 */
 class eZOEXMLInput extends eZXMLInputHandler
 {
-     /**
-     * Constructor
-     * For more info see {@link eZXMLInputHandler::eZXMLInputHandler()}
-     *
-     * @param string $xmlData
-     * @param string $aliasedType
-     * @param eZContentObjectAttribute $contentObjectAttribute
-     */
-    function eZOEXMLInput( $xmlData, $aliasedType, $contentObjectAttribute )
+    public function __construct( $xmlData, $aliasedType, $contentObjectAttribute )
     {
-        $this->eZXMLInputHandler( $xmlData, $aliasedType, $contentObjectAttribute );
+        parent::__construct( $xmlData, $aliasedType, $contentObjectAttribute );
 
         $contentIni = eZINI::instance( 'content.ini' );
         if ( $contentIni->hasVariable( 'header', 'UseStrictHeaderRule' ) === true )
@@ -1861,12 +1853,12 @@ class eZOEXMLInput extends eZXMLInputHandler
                 if ( $customAttributePart === '' )
                 {
                     $customAttributePart = ' customattributes="';
-                    $customAttributePart .= $attribute->name . '|' . $attribute->value;
+                    $customAttributePart .= $attribute->name . '|' . htmlspecialchars( $attribute->value );
                 }
                 else
                 {
                    $customAttributePart .= 'attribute_separation' . $attribute->name . '|' .
-                                           $attribute->value;
+                       htmlspecialchars( $attribute->value );
                 }
                 if ( isset( self::$customAttributeStyleMap[$attribute->name] ) )
                 {
