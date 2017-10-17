@@ -43,6 +43,14 @@ use eZ\Publish\API\Repository\Exceptions\UnauthorizedException;
 */
 class eZOEXMLInput extends eZXMLInputHandler
 {
+	/**
+	 * Constructor
+	 * For more info see {@link eZXMLInputHandler::eZXMLInputHandler()}
+	 *
+	 * @param string $xmlData
+	 * @param string $aliasedType
+	 * @param eZContentObjectAttribute $contentObjectAttribute
+	 */
     public function __construct( $xmlData, $aliasedType, $contentObjectAttribute )
     {
         parent::__construct( $xmlData, $aliasedType, $contentObjectAttribute );
