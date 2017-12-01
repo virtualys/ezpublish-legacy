@@ -1344,11 +1344,19 @@ class eZOEXMLInput extends eZXMLInputHandler
                         
                         if ( is_numeric( $objectID ) ) {
                         	try {
+                        		/** @var \eZ\Publish\API\Repository\Values\Content\Content $content */
                         		$content = $container->get('ezpublish.api.repository')
                         			->sudo(
                         				function ( Repository $repository ) use ( $objectID )
                         				{
                         					return $repository->getContentService()->loadContent( $objectID );
+                        				}
+                        		);
+                        		$location = $container->get('ezpublish.api.repository')
+                        			->sudo(
+                        				function ( Repository $repository ) use ( $content )
+                        				{
+                        					return $repository->getLocationService()->loadLocation( $content->contentInfo->mainLocationId );
                         				}
                         		);
                         		$objectParam['nolink'] = true;
@@ -1358,6 +1366,7 @@ class eZOEXMLInput extends eZXMLInputHandler
                         				$content,
                         				$view == 'layer' ? 'cpnt_shownode' : $view,
                         				array(
+                        						'location' => $location,
                         						'objectParameters' => $objectParam
                         				) );
                         	
@@ -1378,7 +1387,6 @@ class eZOEXMLInput extends eZXMLInputHandler
                         		$templateOutput = '<span class="text-danger">Access denied to object</span>';
                         	}
                         	catch ( \Exception $e ) {
-                        		eZDebug::writeError( $e->getMessage(), __METHOD__ . ' -- ' . __LINE__ );
                         		$templateOutput = '<span class="text-danger">Internal error : ' . $e->getMessage() . '</span>';
                         	}
                         }
