@@ -533,7 +533,7 @@ class ezjscPacker
      */
     static function fixImgPaths( $fileContent, $file )
     {
-        if ( preg_match_all( "/url\(\s*[\'|\"]?([A-Za-z0-9_\-\/\.\\%?&#=]+)[\'|\"]?\s*\)/ix", $fileContent, $urlMatches ) )
+        if ( preg_match_all( "/url\(\s*[\'|\"]?([A-Za-z0-9_\-\/\.\\%?&@#=]+)[\'|\"]?\s*\)/ix", $fileContent, $urlMatches ) )
         {
            $urlPaths = array();
            $urlMatches = array_unique( $urlMatches[1] );
