@@ -1,4 +1,6 @@
 <?php
+use eZ\Publish\Core\MVC\ConfigResolverInterface;
+
 //
 // Created on: <25-Des-2007 00:00:00 ar>
 //
@@ -150,7 +152,13 @@ foreach( $imageSizeArray as $size )
 /// Patch EZ Platform
 
 $container = ezpKernel::instance()->getServiceContainer();
+/** @var ConfigResolverInterface $configResolver */
 $configResolver = $container->get( 'ezpublish.config.resolver' );
+
+if( $configResolver->hasParameter( 'content_image_variations_reset_legacy', 'virtualys_sns_content' ) && 
+	$configResolver->getParameter( 'content_image_variations_reset_legacy', 'virtualys_sns_content' ) ) {
+		$sizeTypeArray= [];
+}
 if ( $configResolver->hasParameter( 'content_image_variations', 'virtualys_sns_content' ) ) {
 	$variations = $configResolver->getParameter( 'content_image_variations', 'virtualys_sns_content' );
 	foreach ( $variations as $variation => $properties ) {
