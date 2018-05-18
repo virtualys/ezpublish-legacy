@@ -1298,7 +1298,10 @@ class eZOEXMLInput extends eZXMLInputHandler
                     else
                         $htmlTagName = 'div';
 
-                    $objectParam = array( 'size' => $size, 'align' => $alignment, 'show_path' => $showPath );
+                    $objectParam = array( 'size' => $size, 'show_path' => $showPath );
+                    if( $alignment ) {
+                    	$objectParam['align'] = $alignment;
+                    }
                     if ( $htmlID ) $objectParam['id'] = $htmlID;
                     
                     //////
