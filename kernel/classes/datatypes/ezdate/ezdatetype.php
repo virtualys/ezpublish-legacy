@@ -99,7 +99,6 @@ class eZDateType extends eZDataType
             $year  = $http->postVariable( $base . '_date_year_' . $contentObjectAttribute->attribute( 'id' ) );
             $month = $http->postVariable( $base . '_date_month_' . $contentObjectAttribute->attribute( 'id' ) );
             $day   = $http->postVariable( $base . '_date_day_' . $contentObjectAttribute->attribute( 'id' ) );
-            $contentClassAttribute = $contentObjectAttribute->contentClassAttribute();
 
             if ( ( $year == '' and $month == '' and $day == '' ) or
                  !checkdate( $month, $day, $year ) )
@@ -128,7 +127,6 @@ class eZDateType extends eZDataType
             $year  = $http->postVariable( $base . '_date_year_' . $contentObjectAttribute->attribute( 'id' ) );
             $month = $http->postVariable( $base . '_date_month_' . $contentObjectAttribute->attribute( 'id' ) );
             $day   = $http->postVariable( $base . '_date_day_' . $contentObjectAttribute->attribute( 'id' ) );
-            $classAttribute = $contentObjectAttribute->contentClassAttribute();
 
             if ( $year == '' or $month == '' or $day == '' )
             {
@@ -164,7 +162,6 @@ class eZDateType extends eZDataType
             $year  = $http->postVariable( $base . '_date_year_' . $contentObjectAttribute->attribute( 'id' ) );
             $month = $http->postVariable( $base . '_date_month_' . $contentObjectAttribute->attribute( 'id' ) );
             $day   = $http->postVariable( $base . '_date_day_' . $contentObjectAttribute->attribute( 'id' ) );
-            $contentClassAttribute = $contentObjectAttribute->contentClassAttribute();
 
             if ( ( $year == '' and $month == '' and $day == '' ) or
                  !checkdate( $month, $day, $year ) )
@@ -192,7 +189,7 @@ class eZDateType extends eZDataType
         $date = new eZDate( );
         $stamp = $contentObjectAttribute->attribute( 'data_int' );
         $date->setTimeStamp(
-            eZTimestamp::getLocalTimestampFromUtcTimestamp( $stamp )
+        		$stamp === null ? $stamp : eZTimestamp::getLocalTimestampFromUtcTimestamp( $stamp )
         );
         return $date;
     }
@@ -221,7 +218,7 @@ class eZDateType extends eZDataType
         {
             $contentClassAttribute = $contentObjectAttribute->contentClassAttribute();
             $defaultType = $contentClassAttribute->attribute( self::DEFAULT_FIELD );
-            if ( $defaultType == 1 )
+            if ( $defaultType == self::DEFAULT_CURRENT_DATE )
                 $contentObjectAttribute->setAttribute( "data_int", time() );
         }
     }
