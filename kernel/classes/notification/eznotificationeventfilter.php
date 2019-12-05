@@ -32,7 +32,7 @@ class eZNotificationEventFilter
                 $db = eZDB::instance();
                 $db->begin();
 
-                foreach( $availableHandlers as $handler )
+                foreach( $availableHandlers as $handlerKey => $handler )
                 {
                     if ( $handler === false )
                     {

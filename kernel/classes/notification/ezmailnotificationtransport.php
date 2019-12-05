@@ -20,8 +20,19 @@ class eZMailNotificationTransport extends eZNotificationTransport
     {
         $ini = eZINI::instance();
         $mail = new eZMail();
-        $addressList = $this->prepareAddressString( $addressList, $mail );
 
+        if ( $ini->hasVariable( 'MailSettings', 'DebugSending' ) &&
+        		$ini->variable( 'MailSettings', 'DebugSending' ) == 'enabled' ) {
+        	if ( $ini->hasVariable( 'MailSettings', 'DebugReceiverEmail' ) ) {
+        		$addressList = array(
+        				$ini->variable( 'MailSettings', 'DebugReceiverEmail' )
+        		);
+        	}
+		}
+		else {
+			$addressList = $this->prepareAddressString( $addressList, $mail );
+		}
+		eZLog::write( __METHOD__ . "-- Receivers " . print_r( $addressList, true ), "cronjob_notification.log" );
         if ( $addressList == false )
         {
             eZDebug::writeError( 'Error with receiver', __METHOD__ );
