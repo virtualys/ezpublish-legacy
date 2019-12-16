@@ -249,6 +249,7 @@ else if ( $module->isCurrentAction( 'MoveNode' ) )
             return $module->handleError( eZError::KERNEL_NOT_AVAILABLE, 'kernel', array() );
 
         $nodeToMoveList[] = array( 'node_id'   => $nodeID,
+                                   'parent_node_id' => $node->attribute('parent_node_id'),
                                    'object_id' => $object->attribute( 'id' ) );
 
         $class = $object->contentClass();
@@ -279,6 +280,7 @@ else if ( $module->isCurrentAction( 'MoveNode' ) )
             $operationResult = eZOperationHandler::execute( 'content',
                                                             'move', array( 'node_id'            => $nodeToMove['node_id'],
                                                                            'object_id'          => $nodeToMove['object_id'],
+                                                                           'old_parent_node_id' => $nodeToMove['parent_node_id'],
                                                                            'new_parent_node_id' => $selectedNodeID ),
                                                             null,
                                                             true );
