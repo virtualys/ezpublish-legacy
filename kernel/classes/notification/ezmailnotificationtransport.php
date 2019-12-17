@@ -32,7 +32,6 @@ class eZMailNotificationTransport extends eZNotificationTransport
 		else {
 			$addressList = $this->prepareAddressString( $addressList, $mail );
 		}
-		eZLog::write( __METHOD__ . "-- Receivers " . print_r( $addressList, true ), "cronjob_notification.log" );
         if ( $addressList == false )
         {
             eZDebug::writeError( 'Error with receiver', __METHOD__ );
